@@ -7,8 +7,8 @@
 
   if (typeof buster !== "undefined" && buster !== null) buster.spec.expose();
 
-  describe("Flow Nodes", function() {
-    var expectProperStepInitialization, test_context;
+  describe("Flow Test Package", function() {
+    var expectProperStepInitialization, test_context, test_flow;
     test_context = {
       id: "test_step",
       to: "next_item",
@@ -27,10 +27,7 @@
       it("initializes correctly when provided a full context", function() {
         var step;
         step = new flow.Step(test_context);
-        expect(step.id).toEqual("test_step");
-        expect(step.to).toEqual("next_item");
-        expect(step.from).toEqual("previous_item");
-        return expect(step.view).toEqual("test_step_view");
+        return expectProperStepInitialization(step, test_context);
       });
       it("initialized the id using an incremented id when unavailable", function() {
         var step;
@@ -45,18 +42,218 @@
         expect(step.name).toEqual("1234");
         return expect(step.name).toEqual(step.id);
       });
-      return it("sets the 'to' and 'from' property to null if the properties where not provided", function() {
+      it("sets the 'to' and 'from' property to null if the properties where not provided", function() {
         var step;
         step = new flow.Step();
+        expect(step.to).toBeDefined();
         expect(step.to).toBeNull();
-        return expect(step.from).toBeNull();
+        expect(step.from).toBeNull();
+        return expect(step.from).toBeDefined();
+      });
+      it("should have the state set to 'never_seen' when initialized", function() {
+        var step;
+        step = new flow.Step();
+        expect(step.state.weight).toEqual(-2);
+        return expect(step.state.name).toEqual("never_seen");
+      });
+      it("should return a default no-op validation function when initialized", function() {
+        var step;
+        step = new flow.Step();
+        return expect(step.validate()).toEqual(true);
+      });
+      it("should default to a synchronous step if no async=true 			value is provided in the context", function() {
+        var step;
+        step = new flow.Step();
+        return expect(step.async).toEqual(false);
+      });
+      return it("should become an asynchronous step if async=true is specified 			in the context", function() {
+        var step;
+        step = new flow.Step({
+          async: true
+        });
+        return expect(step.async).toEqual(true);
       });
     });
-    return describe("flow.ResourceStep", function() {
-      return it("initializes resources using the parent constructor", function() {
+    describe("flow.ResourceStep", function() {
+      it("initializes resources using the parent constructor", function() {
         var rstep;
         rstep = new flow.ResourceStep(test_context);
         return expectProperStepInitialization(rstep, test_context);
+      });
+      return it("should initialize the resource object with 'null' path and context values when not specified", function() {
+        var rstep;
+        rstep = new flow.ResourceStep();
+        expect(rstep.resource).toBeDefined();
+        expect(rstep.resource.path).toBeDefined();
+        expect(rstep.resource.path).toBeNull();
+        expect(rstep.resource.context).toBeDefined();
+        return expect(rstep.resource.context).toBeNull();
+      });
+    });
+    test_flow = {
+      id: "test_flow",
+      steps: [
+        {
+          type: "Step",
+          view: "/template1.txt"
+        }, {
+          type: "Step",
+          view: "/template2.txt"
+        }, {
+          type: "Step",
+          view: "/template3.txt"
+        }, {
+          type: "Step",
+          view: "/template4.txt"
+        }
+      ]
+    };
+    describe("flow.Sequence", function() {
+      var expectProperSequenceState;
+      expectProperSequenceState = function(seq, current_position, length, current_step) {
+        expect(seq.current_position).toEqual(current_position);
+        expect(seq.length).toEqual(length);
+        if (current_step != null) {
+          return expect(seq.current).toEqual(current_step);
+        } else {
+          expect(seq.current).toBeDefined();
+          return expect(seq.current).toBeNull();
+        }
+      };
+      it("properly initializes with no provided state", function() {
+        var seq;
+        seq = new flow.Sequence();
+        return expectProperSequenceState(seq, -1, 0);
+      });
+      it("initializes with supplied state correcly", function() {
+        var seq;
+        seq = new flow.Sequence(test_flow);
+        return expectProperSequenceState(seq, 0, 4, test_flow.steps[0]);
+      });
+      it("correctly determines whether it has a next step in the sequence", function() {
+        var seq;
+        seq = new flow.Sequence();
+        expect(seq.has_next()).toEqual(false);
+        seq = new flow.Sequence(test_flow);
+        expect(seq.has_next()).toEqual(true);
+        seq = new flow.Sequence({
+          steps: [
+            {
+              type: "Step",
+              view: "/template1.txt"
+            }
+          ]
+        });
+        return expect(seq.has_next()).toEqual(false);
+      });
+      it("correctly moves to the next step in the sequence, not allowing 			the sequence to proceed past the last step", function() {
+        var seq;
+        seq = new flow.Sequence();
+        seq.next();
+        expectProperSequenceState(seq, -1, 0);
+        seq = new flow.Sequence(test_flow);
+        expectProperSequenceState(seq, 0, 4, test_flow.steps[0]);
+        seq.next();
+        expectProperSequenceState(seq, 1, 4, test_flow.steps[1]);
+        seq.next();
+        expectProperSequenceState(seq, 2, 4, test_flow.steps[2]);
+        seq.next();
+        expectProperSequenceState(seq, 3, 4, test_flow.steps[3]);
+        seq.next();
+        return expectProperSequenceState(seq, 3, 4, test_flow.steps[3]);
+      });
+      it("correctly determines whether it has a previous step in the sequence", function() {
+        var seq;
+        seq = new flow.Sequence();
+        expect(seq.has_previous()).toEqual(false);
+        seq = new flow.Sequence(test_flow);
+        expect(seq.has_previous()).toEqual(false);
+        seq.next();
+        return expect(seq.has_previous()).toEqual(true);
+      });
+      it("correctly moves to the previous step in the sequence, not allowing 			the sequence to move before the first step", function() {
+        var seq;
+        seq = new flow.Sequence();
+        expectProperSequenceState(seq, -1, 0);
+        seq.previous();
+        expectProperSequenceState(seq, -1, 0);
+        seq = new flow.Sequence(test_flow);
+        while (seq.has_next()) {
+          seq.next();
+        }
+        expectProperSequenceState(seq, 3, 4, test_flow.steps[3]);
+        seq.previous();
+        expectProperSequenceState(seq, 2, 4, test_flow.steps[2]);
+        seq.previous();
+        expectProperSequenceState(seq, 1, 4, test_flow.steps[1]);
+        seq.previous();
+        expectProperSequenceState(seq, 0, 4, test_flow.steps[0]);
+        seq.previous();
+        return expectProperSequenceState(seq, 0, 4, test_flow.steps[0]);
+      });
+      it("correctly allows the addition of new steps", function() {
+        var seq, step;
+        seq = new flow.Sequence();
+        expectProperSequenceState(seq, -1, 0);
+        step = {
+          type: "Step",
+          view: "/template1.txt"
+        };
+        seq.append(step);
+        expectProperSequenceState(seq, 0, 1, step);
+        seq.append(step);
+        return expectProperSequenceState(seq, 0, 2, step);
+      });
+      return it("correctly allows the addition of multiple steps", function() {
+        var seq;
+        seq = new flow.Sequence();
+        expectProperSequenceState(seq, -1, 0);
+        seq.append_all(test_flow.steps);
+        return expectProperSequenceState(seq, 0, 4, test_flow.steps[0]);
+      });
+    });
+    return describe("flow.Flow", function() {
+      var expectProperPosition;
+      expectProperPosition = function(flow, length, position, stepValue) {
+        expect(flow.sequence.length).toEqual(length);
+        expect(flow.current.position).toEqual(position);
+        if (stepValue != null) {
+          return expect(flow.current.step).toEqual(stepValue);
+        } else {
+          expect(flow.current.step).toBeNull();
+          return expect(flow.current.step).toBeDefined();
+        }
+      };
+      it("initializes defaults correctly, setting the current position 			and node length to zero", function() {
+        var flow1;
+        flow1 = new flow.Flow();
+        return expectProperPosition(flow1, 0, -1);
+      });
+      it("initializes from a supplied sequence, setting the current position 			to 1, and length to the number of steps", function() {
+        var flow1;
+        flow1 = new flow.Flow(test_flow);
+        return expectProperPosition(flow1, 4, 0, test_flow.steps[0]);
+      });
+      return it("moves to next and previous nodes, setting the current position to the correct value, 			does not allow the sequence to move past the final node or before the first node", function() {
+        var flow1;
+        flow1 = new flow.Flow(test_flow);
+        expectProperPosition(flow1, 4, 0, test_flow.steps[0]);
+        flow1.forward();
+        expectProperPosition(flow1, 4, 1, test_flow.steps[1]);
+        flow1.forward();
+        expectProperPosition(flow1, 4, 2, test_flow.steps[2]);
+        flow1.forward();
+        expectProperPosition(flow1, 4, 3, test_flow.steps[3]);
+        flow1.forward();
+        expectProperPosition(flow1, 4, 3, test_flow.steps[3]);
+        flow1.back();
+        expectProperPosition(flow1, 4, 2, test_flow.steps[2]);
+        flow1.back();
+        expectProperPosition(flow1, 4, 1, test_flow.steps[1]);
+        flow1.back();
+        expectProperPosition(flow1, 4, 0, test_flow.steps[0]);
+        flow1.back();
+        return expectProperPosition(flow1, 4, 0, test_flow.steps[0]);
       });
     });
   });
