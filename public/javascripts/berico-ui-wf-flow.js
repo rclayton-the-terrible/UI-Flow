@@ -86,17 +86,17 @@
       }
     };
 
-    Step.arrayify = function(handlers) {
-      if (handlers.push != null) {
-        return handlers;
+    Step.arrayify = function(items) {
+      if ((items.push != null) && (items.length != null)) {
+        return items;
       } else {
-        return [handlers];
+        return [items];
       }
     };
 
     Step.prototype.set_state = function(name) {
       var state_ctx;
-      state_ctx = this.get_state_by_name(name);
+      state_ctx = Step.get_state_by_name(name);
       if (state_ctx != null) return this.state = state_ctx;
     };
 
@@ -107,7 +107,7 @@
     Step.prototype.is_valid = function() {
       var validated;
       Step.fire(this.on_validating);
-      validated = this.validate();
+      validated = this.validate.apply(this);
       if (validated) {
         this.set_state("validated");
         return Step.fire(this.on_validated);

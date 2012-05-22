@@ -26,6 +26,7 @@ class Step
 		@to = @to ? null
 		@from = @from ? null
 		@state = @state ? Step.get_state_by_name "never_seen"
+		# Delegate Methods
 		@validate = @validate ? () -> true
 		# Event Handlers
 		@on_loading = Step.normalize_handlers @on_loading
@@ -49,21 +50,24 @@ class Step
 	@normalize_handlers: (handlers)->
 		if handlers? then return Step.arrayify handlers else return []
 	
-	@arrayify: (handlers)->
-		if handlers.push?
-			return handlers
+	@arrayify: (items)->
+		# instead of asking existential questions about the object's type, 
+		# we will use a little duck-typing to determine if this item
+		# quacks like an array
+		if items.push? and items.length?
+			return items
 		else
-		    return [ handlers ]
+		    return [ items ]
 	
 	set_state: (name) ->
-		state_ctx = @get_state_by_name name
+		state_ctx = Step.get_state_by_name name
 		@state = state_ctx if state_ctx?
 	
 	length: ()-> 1
 	
 	is_valid: ()->
 		Step.fire @on_validating
-		validated = @validate()
+		validated = @validate.apply(@)
 		if validated
 			@set_state("validated")
 			Step.fire @on_validated

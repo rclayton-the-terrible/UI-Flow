@@ -8,7 +8,7 @@
   if (typeof buster !== "undefined" && buster !== null) buster.spec.expose();
 
   describe("Flow Test Package", function() {
-    var expectProperStepInitialization, test_context, test_flow;
+    var ensureHandlerIsCalled, expectProperStepInitialization, test_context, test_flow;
     test_context = {
       id: "test_step",
       to: "next_item",
@@ -22,6 +22,14 @@
         expect(target[property]).toEqual(value);
       }
       return null;
+    };
+    ensureHandlerIsCalled = function(handlerName, spy, initiator) {
+      var handlers, step;
+      handlers = {};
+      handlers[handlerName] = spy;
+      step = new flow.Step(handlers);
+      initiator(step);
+      return expect(spy).toHaveBeenCalled();
     };
     describe("flow.Step", function() {
       it("initializes correctly when provided a full context", function() {
@@ -66,12 +74,112 @@
         step = new flow.Step();
         return expect(step.async).toEqual(false);
       });
-      return it("should become an asynchronous step if async=true is specified 			in the context", function() {
+      it("should become an asynchronous step if async=true is specified 			in the context", function() {
         var step;
         step = new flow.Step({
           async: true
         });
         return expect(step.async).toEqual(true);
+      });
+      it("defines a set of empty event handlers if none are provided", function() {
+        var step;
+        step = new flow.Step();
+        expect(step.on_loading).toEqual([]);
+        expect(step.on_load).toEqual([]);
+        expect(step.on_validating).toEqual([]);
+        expect(step.on_validated).toEqual([]);
+        expect(step.on_not_validated).toEqual([]);
+        expect(step.on_leaving).toEqual([]);
+        return expect(step.on_leave).toEqual([]);
+      });
+      it("properly sets a handler when supplied via context", function() {
+        var handlers, step;
+        handlers = {
+          on_loading: function() {
+            return true;
+          },
+          on_load: function() {
+            return true;
+          },
+          on_validating: function() {
+            return true;
+          },
+          on_validated: function() {
+            return true;
+          },
+          on_not_validated: function() {
+            return true;
+          },
+          on_leaving: function() {
+            return true;
+          },
+          on_leave: function() {
+            return true;
+          }
+        };
+        step = new flow.Step(handlers);
+        expect(step.on_loading).toEqual([handlers.on_loading]);
+        expect(step.on_load).toEqual([handlers.on_load]);
+        expect(step.on_validating).toEqual([handlers.on_validating]);
+        expect(step.on_validated).toEqual([handlers.on_validated]);
+        expect(step.on_not_validated).toEqual([handlers.on_not_validated]);
+        expect(step.on_leaving).toEqual([handlers.on_leaving]);
+        return expect(step.on_leave).toEqual([handlers.on_leave]);
+      });
+      it("calls the 'on_loading' handler when the Step is instructed to load", function() {
+        return ensureHandlerIsCalled("on_loading", this.spy(), function(step) {
+          return step.load();
+        });
+      });
+      it("calls the 'on_load' handler when the Step had been loaded", function() {
+        return ensureHandlerIsCalled("on_load", this.spy(), function(step) {
+          return step.load();
+        });
+      });
+      it("calls the 'on_validating' handler when the Step had been asked to validate", function() {
+        return ensureHandlerIsCalled("on_validating", this.spy(), function(step) {
+          return step.is_valid();
+        });
+      });
+      it("calls the 'on_validated' handler when the Step had been validated", function() {
+        return ensureHandlerIsCalled("on_validated", this.spy(), function(step) {
+          return step.is_valid();
+        });
+      });
+      it("calls the 'on_not_validated' handler when the Step had failed to validate", function() {
+        var context, on_not_validated_handler, on_validated_handler, on_validating_handler, step;
+        on_not_validated_handler = this.spy();
+        on_validating_handler = this.spy();
+        on_validated_handler = this.spy();
+        context = {
+          on_not_validated: on_not_validated_handler,
+          on_validated: on_validated_handler,
+          on_validating: on_validating_handler,
+          validate: function() {
+            return false;
+          }
+        };
+        step = new flow.Step(context);
+        step.is_valid();
+        expect(on_validating_handler).toHaveBeenCalled();
+        expect(on_not_validated_handler).toHaveBeenCalled();
+        return refute.called(on_validated_handler);
+      });
+      it("normalizes a null handler to an empty array", function() {
+        return expect(flow.Step.normalize_handlers(null)).toEqual([]);
+      });
+      it("normalizes a single handler to an array of handlers", function() {
+        var handler;
+        handler = function() {
+          return true;
+        };
+        return expect(flow.Step.normalize_handlers(handler)).toEqual([handler]);
+      });
+      return it("turns an object into a single item array, or if the 			object is an array, simply returns it", function() {
+        var test_array;
+        test_array = [1, 2, 3];
+        expect(flow.Step.arrayify(test_array)).toEqual(test_array);
+        return expect(flow.Step.arrayify(1)).toEqual([1]);
       });
     });
     describe("flow.ResourceStep", function() {

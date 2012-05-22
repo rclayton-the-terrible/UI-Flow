@@ -15,23 +15,34 @@ describe "Flow Test Package", ->
 		expect(target[property]).toEqual(value) for property, value of context
 		null #idiotic fix
 	
+	ensureHandlerIsCalled = (handlerName, spy, initiator) ->
+		
+		handlers = {}
+		handlers[handlerName] = spy
+		
+		step = new flow.Step(handlers)
+		
+		initiator step
+		
+		expect(spy).toHaveBeenCalled()
+	
 	describe "flow.Step", ->
 		
 		it "initializes correctly when provided a full context", ->
 			
-			step = new flow.Step test_context
+			step = new flow.Step(test_context)
 			
 			expectProperStepInitialization step, test_context
 		
 		it "initialized the id using an incremented id when unavailable", ->
 			
-			step = new flow.Step {}
+			step = new flow.Step({})
 			
 			expect(step.id).toMatch /step_[0-9]+/
 			
 		it "sets the name of the node to the id of the node if the name was not provided", ->
 			
-			step = new flow.Step { id: "1234" }
+			step = new flow.Step({ id: "1234" })
 			
 			expect(step.name).toEqual "1234"
 			expect(step.name).toEqual step.id
@@ -69,11 +80,99 @@ describe "Flow Test Package", ->
 			step = new flow.Step({ async: true })
 			expect(step.async).toEqual true
 
+		it "defines a set of empty event handlers if none are provided", ->
+			
+			step = new flow.Step()
+			expect(step.on_loading).toEqual []
+			expect(step.on_load).toEqual []
+			expect(step.on_validating).toEqual []
+			expect(step.on_validated).toEqual []
+			expect(step.on_not_validated).toEqual []
+			expect(step.on_leaving).toEqual []
+			expect(step.on_leave).toEqual []
+
+		it "properly sets a handler when supplied via context", ->
+			
+			handlers =
+				on_loading: ()-> true
+				on_load: ()-> true
+				on_validating: ()-> true
+				on_validated: ()-> true
+				on_not_validated: ()-> true
+				on_leaving: ()-> true
+				on_leave: ()-> true
+			
+			step = new flow.Step(handlers)
+			
+			expect(step.on_loading).toEqual [ handlers.on_loading ]
+			expect(step.on_load).toEqual [ handlers.on_load ]
+			expect(step.on_validating).toEqual [ handlers.on_validating ]
+			expect(step.on_validated).toEqual [ handlers.on_validated ]
+			expect(step.on_not_validated).toEqual [ handlers.on_not_validated ]
+			expect(step.on_leaving).toEqual [ handlers.on_leaving ]
+			expect(step.on_leave).toEqual [ handlers.on_leave ]
+			
+		it "calls the 'on_loading' handler when the Step is instructed to load", ->
+			
+			ensureHandlerIsCalled "on_loading", @spy(), (step) -> step.load()
+		
+		it "calls the 'on_load' handler when the Step had been loaded", ->
+			
+			ensureHandlerIsCalled "on_load", @spy(), (step) -> step.load()
+		
+		it "calls the 'on_validating' handler when the Step had been asked to validate", ->
+			
+			ensureHandlerIsCalled "on_validating", @spy(), (step) -> step.is_valid()
+		
+		it "calls the 'on_validated' handler when the Step had been validated", ->
+			
+			ensureHandlerIsCalled "on_validated", @spy(), (step) -> step.is_valid()
+		
+		it "calls the 'on_not_validated' handler when the Step had failed to validate", ->
+
+			on_not_validated_handler = @spy()
+			on_validating_handler = @spy()
+			on_validated_handler = @spy()
+			
+			context = 
+				on_not_validated: on_not_validated_handler
+				on_validated: on_validated_handler
+				on_validating: on_validating_handler
+				# Have to override the default validation function
+				validate: ()-> false 
+			
+			step = new flow.Step(context)
+			
+			step.is_valid()
+			
+			expect(on_validating_handler).toHaveBeenCalled()
+			expect(on_not_validated_handler).toHaveBeenCalled()
+			refute.called(on_validated_handler)
+		
+		it "normalizes a null handler to an empty array", ->
+			
+			expect(flow.Step.normalize_handlers null).toEqual []
+			
+		it "normalizes a single handler to an array of handlers", ->
+			
+			handler = ()-> true
+			
+			expect(flow.Step.normalize_handlers handler).toEqual [ handler ]
+
+		it "turns an object into a single item array, or if the 
+			object is an array, simply returns it", ->
+			
+			test_array = [ 1, 2, 3 ]	
+			
+			expect(flow.Step.arrayify test_array).toEqual test_array
+			
+			expect(flow.Step.arrayify 1).toEqual [ 1 ]
+
 	describe "flow.ResourceStep", ->
 		
 		it "initializes resources using the parent constructor", ->
 			
-			rstep = new flow.ResourceStep test_context
+			rstep = new flow.ResourceStep(test_context)
 			expectProperStepInitialization rstep, test_context
 		
 		it "should initialize the resource object with 'null' path and context values when not specified", ->
