@@ -2,6 +2,27 @@
 if require?
 	_ = (require "./underscore.js")._
 
+class Utils
+	
+	@normalize_handlers: (handlers)->
+		if handlers? then return Utils.arrayify handlers else return []
+	
+	@arrayify: (items)->
+		# instead of asking existential questions about the object's type, 
+		# we will use a little duck-typing to determine if this item
+		# quacks like an array
+		if items.push? and items.length?
+			return items
+		else
+		    return [ items ]
+
+	@fire: (handlers, this_obj)->
+		# This looks wierd (handler.apply), but what we are doing is supply the handler
+		# with an object (this_obj) in which the closure for 'this' will apply.  We also
+		# supply the same object as the first parameter.  You choose how you want to 
+		# deal with the supplied object.
+		handler.apply(this_obj, [ this_obj ]) for handler in handlers
+
 ###
 	The simplest Node in the Finite State Machine "flow" model.
 ###
@@ -29,13 +50,13 @@ class Step
 		# Delegate Methods
 		@validate = @validate ? () -> true
 		# Event Handlers
-		@on_loading = Step.normalize_handlers @on_loading
-		@on_load = Step.normalize_handlers @on_load
-		@on_validating = Step.normalize_handlers @on_validating
-		@on_validated = Step.normalize_handlers @on_validated
-		@on_not_validated = Step.normalize_handlers @on_not_validated
-		@on_leaving = Step.normalize_handlers @on_leaving
-		@on_leave = Step.normalize_handlers @on_leave
+		@on_loading = Utils.normalize_handlers @on_loading
+		@on_load = Utils.normalize_handlers @on_load
+		@on_validating = Utils.normalize_handlers @on_validating
+		@on_validated = Utils.normalize_handlers @on_validated
+		@on_not_validated = Utils.normalize_handlers @on_not_validated
+		@on_leaving = Utils.normalize_handlers @on_leaving
+		@on_leave = Utils.normalize_handlers @on_leave
 		
 	@get_state_by_name: (name) ->
 		for state in Step.states
@@ -47,52 +68,39 @@ class Step
 			return state if state.weight = weight
 		return null
 	
-	@normalize_handlers: (handlers)->
-		if handlers? then return Step.arrayify handlers else return []
-	
-	@arrayify: (items)->
-		# instead of asking existential questions about the object's type, 
-		# we will use a little duck-typing to determine if this item
-		# quacks like an array
-		if items.push? and items.length?
-			return items
-		else
-		    return [ items ]
-	
 	set_state: (name) ->
 		state_ctx = Step.get_state_by_name name
 		@state = state_ctx if state_ctx?
 	
+	# Seems wierd, but inheriting Steps will be able to have multiple
+	# tasks in a Step, and will override this.
 	length: ()-> 1
 	
 	is_valid: ()->
-		Step.fire @on_validating
+		Utils.fire @on_validating
 		validated = @validate.apply(@)
 		if validated
 			@set_state("validated")
-			Step.fire @on_validated
+			Utils.fire @on_validated
 		else
-			Step.fire @on_not_validated
+			Utils.fire @on_not_validated
 	
 	is_done: ()->
 		return @is_valid()
 	
 	load: ()->
 		@set_state("preload")
-		Step.fire @on_loading
+		Utils.fire @on_loading
 		@set_state("loaded")
-		Step.fire @on_load
+		Utils.fire @on_load
 	
 	unload: ()->
 		@set_state("pretrans")
+		Utils.fire @on_leaving
 		@set_state("posttrans")
+		Utils.fire @on_leave
 	
-	@fire: (handlers, this_obj)->
-		# This looks wierd (handler.apply), but what we are doing is supply the handler
-		# with an object (this_obj) in which the closure for 'this' will apply.  We also
-		# supply the same object as the first parameter.  You choose how you want to 
-		# deal with the supplied object.
-		handler.apply(this_obj, [ this_obj ]) for handler in handlers
+	
 	
 ###
 	Defines a step that manipulates a specific resource
@@ -198,6 +206,7 @@ class Flow
 	
 if exports? then flow = exports else flow = window	
 
+flow.Utils = Utils
 flow.Step = Step
 flow.ResourceStep = ResourceStep
 flow.Sequence = Sequence

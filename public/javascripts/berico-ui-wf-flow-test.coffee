@@ -5,6 +5,27 @@ buster?.spec.expose()
 
 describe "Flow Test Package", ->
 	
+	describe "flow.Utils", ->
+		
+		it "normalizes a null handler to an empty array", ->
+			
+			expect(flow.Utils.normalize_handlers null).toEqual []
+			
+		it "normalizes a single handler to an array of handlers", ->
+			
+			handler = ()-> true
+			
+			expect(flow.Utils.normalize_handlers handler).toEqual [ handler ]
+
+		it "turns an object into a single item array, or if the 
+			object is an array, simply returns it", ->
+			
+			test_array = [ 1, 2, 3 ]	
+			
+			expect(flow.Utils.arrayify test_array).toEqual test_array
+			
+			expect(flow.Utils.arrayify 1).toEqual [ 1 ]
+	
 	test_context =
 		id: "test_step"
 		to: "next_item"
@@ -149,24 +170,30 @@ describe "Flow Test Package", ->
 			expect(on_not_validated_handler).toHaveBeenCalled()
 			refute.called(on_validated_handler)
 		
-		it "normalizes a null handler to an empty array", ->
+		it "calls event handlers in the correct sequence", ->
 			
-			expect(flow.Step.normalize_handlers null).toEqual []
+			handlers =
+				on_loading: @spy()
+				on_load: @spy()
+				on_validating: @spy()
+				on_validated: @spy()
+				on_not_validated: @spy()
+				on_leaving: @spy()
+				on_leave: @spy()
 			
-		it "normalizes a single handler to an array of handlers", ->
+			step = new flow.Step(handlers)
 			
-			handler = ()-> true
+			step.load()
 			
-			expect(flow.Step.normalize_handlers handler).toEqual [ handler ]
-
-		it "turns an object into a single item array, or if the 
-			object is an array, simply returns it", ->
+			assert.callOrder(handlers.on_loading, handlers.on_load)
 			
-			test_array = [ 1, 2, 3 ]	
+			step.is_valid()
 			
-			expect(flow.Step.arrayify test_array).toEqual test_array
+			assert.callOrder(handlers.on_validating, handlers.on_validated)
 			
-			expect(flow.Step.arrayify 1).toEqual [ 1 ]
+			step.unload()
+			
+			assert.callOrder(handlers.on_leaving, handlers.on_leave)
 
 	describe "flow.ResourceStep", ->
 		

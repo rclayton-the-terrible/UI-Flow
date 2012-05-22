@@ -1,11 +1,45 @@
 (function() {
-  var Flow, ResourceStep, Sequence, Step, flow, _,
+  var Flow, ResourceStep, Sequence, Step, Utils, flow, _,
     __hasProp = Object.prototype.hasOwnProperty,
     __extends = function(child, parent) { for (var key in parent) { if (__hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor; child.__super__ = parent.prototype; return child; };
 
   if (typeof require !== "undefined" && require !== null) {
     _ = (require("./underscore.js"))._;
   }
+
+  Utils = (function() {
+
+    function Utils() {}
+
+    Utils.normalize_handlers = function(handlers) {
+      if (handlers != null) {
+        return Utils.arrayify(handlers);
+      } else {
+        return [];
+      }
+    };
+
+    Utils.arrayify = function(items) {
+      if ((items.push != null) && (items.length != null)) {
+        return items;
+      } else {
+        return [items];
+      }
+    };
+
+    Utils.fire = function(handlers, this_obj) {
+      var handler, _i, _len, _results;
+      _results = [];
+      for (_i = 0, _len = handlers.length; _i < _len; _i++) {
+        handler = handlers[_i];
+        _results.push(handler.apply(this_obj, [this_obj]));
+      }
+      return _results;
+    };
+
+    return Utils;
+
+  })();
 
   /*
   	The simplest Node in the Finite State Machine "flow" model.
@@ -49,13 +83,13 @@
       this.validate = (_ref7 = this.validate) != null ? _ref7 : function() {
         return true;
       };
-      this.on_loading = Step.normalize_handlers(this.on_loading);
-      this.on_load = Step.normalize_handlers(this.on_load);
-      this.on_validating = Step.normalize_handlers(this.on_validating);
-      this.on_validated = Step.normalize_handlers(this.on_validated);
-      this.on_not_validated = Step.normalize_handlers(this.on_not_validated);
-      this.on_leaving = Step.normalize_handlers(this.on_leaving);
-      this.on_leave = Step.normalize_handlers(this.on_leave);
+      this.on_loading = Utils.normalize_handlers(this.on_loading);
+      this.on_load = Utils.normalize_handlers(this.on_load);
+      this.on_validating = Utils.normalize_handlers(this.on_validating);
+      this.on_validated = Utils.normalize_handlers(this.on_validated);
+      this.on_not_validated = Utils.normalize_handlers(this.on_not_validated);
+      this.on_leaving = Utils.normalize_handlers(this.on_leaving);
+      this.on_leave = Utils.normalize_handlers(this.on_leave);
     }
 
     Step.get_state_by_name = function(name) {
@@ -78,22 +112,6 @@
       return null;
     };
 
-    Step.normalize_handlers = function(handlers) {
-      if (handlers != null) {
-        return Step.arrayify(handlers);
-      } else {
-        return [];
-      }
-    };
-
-    Step.arrayify = function(items) {
-      if ((items.push != null) && (items.length != null)) {
-        return items;
-      } else {
-        return [items];
-      }
-    };
-
     Step.prototype.set_state = function(name) {
       var state_ctx;
       state_ctx = Step.get_state_by_name(name);
@@ -106,13 +124,13 @@
 
     Step.prototype.is_valid = function() {
       var validated;
-      Step.fire(this.on_validating);
+      Utils.fire(this.on_validating);
       validated = this.validate.apply(this);
       if (validated) {
         this.set_state("validated");
-        return Step.fire(this.on_validated);
+        return Utils.fire(this.on_validated);
       } else {
-        return Step.fire(this.on_not_validated);
+        return Utils.fire(this.on_not_validated);
       }
     };
 
@@ -122,24 +140,16 @@
 
     Step.prototype.load = function() {
       this.set_state("preload");
-      Step.fire(this.on_loading);
+      Utils.fire(this.on_loading);
       this.set_state("loaded");
-      return Step.fire(this.on_load);
+      return Utils.fire(this.on_load);
     };
 
     Step.prototype.unload = function() {
       this.set_state("pretrans");
-      return this.set_state("posttrans");
-    };
-
-    Step.fire = function(handlers, this_obj) {
-      var handler, _i, _len, _results;
-      _results = [];
-      for (_i = 0, _len = handlers.length; _i < _len; _i++) {
-        handler = handlers[_i];
-        _results.push(handler.apply(this_obj, [this_obj]));
-      }
-      return _results;
+      Utils.fire(this.on_leaving);
+      this.set_state("posttrans");
+      return Utils.fire(this.on_leave);
     };
 
     return Step;
@@ -311,6 +321,8 @@
   } else {
     flow = window;
   }
+
+  flow.Utils = Utils;
 
   flow.Step = Step;
 

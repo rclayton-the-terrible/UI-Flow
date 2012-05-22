@@ -9,6 +9,24 @@
 
   describe("Flow Test Package", function() {
     var ensureHandlerIsCalled, expectProperStepInitialization, test_context, test_flow;
+    describe("flow.Utils", function() {
+      it("normalizes a null handler to an empty array", function() {
+        return expect(flow.Utils.normalize_handlers(null)).toEqual([]);
+      });
+      it("normalizes a single handler to an array of handlers", function() {
+        var handler;
+        handler = function() {
+          return true;
+        };
+        return expect(flow.Utils.normalize_handlers(handler)).toEqual([handler]);
+      });
+      return it("turns an object into a single item array, or if the 			object is an array, simply returns it", function() {
+        var test_array;
+        test_array = [1, 2, 3];
+        expect(flow.Utils.arrayify(test_array)).toEqual(test_array);
+        return expect(flow.Utils.arrayify(1)).toEqual([1]);
+      });
+    });
     test_context = {
       id: "test_step",
       to: "next_item",
@@ -165,21 +183,24 @@
         expect(on_not_validated_handler).toHaveBeenCalled();
         return refute.called(on_validated_handler);
       });
-      it("normalizes a null handler to an empty array", function() {
-        return expect(flow.Step.normalize_handlers(null)).toEqual([]);
-      });
-      it("normalizes a single handler to an array of handlers", function() {
-        var handler;
-        handler = function() {
-          return true;
+      return it("calls event handlers in the correct sequence", function() {
+        var handlers, step;
+        handlers = {
+          on_loading: this.spy(),
+          on_load: this.spy(),
+          on_validating: this.spy(),
+          on_validated: this.spy(),
+          on_not_validated: this.spy(),
+          on_leaving: this.spy(),
+          on_leave: this.spy()
         };
-        return expect(flow.Step.normalize_handlers(handler)).toEqual([handler]);
-      });
-      return it("turns an object into a single item array, or if the 			object is an array, simply returns it", function() {
-        var test_array;
-        test_array = [1, 2, 3];
-        expect(flow.Step.arrayify(test_array)).toEqual(test_array);
-        return expect(flow.Step.arrayify(1)).toEqual([1]);
+        step = new flow.Step(handlers);
+        step.load();
+        assert.callOrder(handlers.on_loading, handlers.on_load);
+        step.is_valid();
+        assert.callOrder(handlers.on_validating, handlers.on_validated);
+        step.unload();
+        return assert.callOrder(handlers.on_leaving, handlers.on_leave);
       });
     });
     describe("flow.ResourceStep", function() {
