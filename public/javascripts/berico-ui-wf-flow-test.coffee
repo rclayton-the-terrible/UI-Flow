@@ -14,7 +14,7 @@ describe "Flow Test Package", ->
 	expectProperStepInitialization = (target, context) ->
 		expect(target[property]).toEqual(value) for property, value of context
 		null #idiotic fix
-			
+	
 	describe "flow.Step", ->
 		
 		it "initializes correctly when provided a full context", ->
@@ -104,7 +104,7 @@ describe "Flow Test Package", ->
 		
 		expectProperSequenceState = (seq, current_position, length, current_step) ->
 			expect(seq.current_position).toEqual current_position
-			expect(seq.length).toEqual length
+			expect(seq.length()).toEqual length
 			if current_step?
 				expect(seq.current).toEqual current_step
 			else
@@ -253,11 +253,44 @@ describe "Flow Test Package", ->
 			
 			expectProperSequenceState(seq, 0, 4, test_flow.steps[0])
 			
+		it "returns a the correct step at any given position in the sequence", ->
 			
+			seq = new flow.Sequence()
+			
+			expect(seq.get(1)).toBeNull()
+			
+			seq = new flow.Sequence(test_flow)
+			
+			expect(seq.get(0)).toEqual test_flow.steps[0]
+			expect(seq.get(1)).toEqual test_flow.steps[1]
+			expect(seq.get(2)).toEqual test_flow.steps[2]
+			expect(seq.get(3)).toEqual test_flow.steps[3]
+		
+		it "returns the correct length if nested sequences are included as steps", ->
+			
+			sub_seq1 = new flow.Sequence(test_flow)
+			sub_seq2 = new flow.Sequence(test_flow)
+			
+			step = new flow.Step()
+			
+			complex_flow = 
+				id: "Complex Flow"
+				steps: [
+					sub_seq1,
+					sub_seq2,
+					step
+				]
+			
+			seq = new flow.Sequence(complex_flow)
+			
+			expectProperSequenceState(seq, 0, 9, sub_seq1)
+		
+	
+	
 	describe "flow.Flow", ->
 		
 		expectProperPosition = (flow, length, position, stepValue) ->
-			expect(flow.sequence.length).toEqual length
+			expect(flow.length()).toEqual length
 			expect(flow.current.position).toEqual position
 			if stepValue? 
 				expect(flow.current.step).toEqual stepValue 

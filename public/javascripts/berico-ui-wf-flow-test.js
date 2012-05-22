@@ -112,7 +112,7 @@
       var expectProperSequenceState;
       expectProperSequenceState = function(seq, current_position, length, current_step) {
         expect(seq.current_position).toEqual(current_position);
-        expect(seq.length).toEqual(length);
+        expect(seq.length()).toEqual(length);
         if (current_step != null) {
           return expect(seq.current).toEqual(current_step);
         } else {
@@ -204,18 +204,40 @@
         seq.append(step);
         return expectProperSequenceState(seq, 0, 2, step);
       });
-      return it("correctly allows the addition of multiple steps", function() {
+      it("correctly allows the addition of multiple steps", function() {
         var seq;
         seq = new flow.Sequence();
         expectProperSequenceState(seq, -1, 0);
         seq.append_all(test_flow.steps);
         return expectProperSequenceState(seq, 0, 4, test_flow.steps[0]);
       });
+      it("returns a the correct step at any given position in the sequence", function() {
+        var seq;
+        seq = new flow.Sequence();
+        expect(seq.get(1)).toBeNull();
+        seq = new flow.Sequence(test_flow);
+        expect(seq.get(0)).toEqual(test_flow.steps[0]);
+        expect(seq.get(1)).toEqual(test_flow.steps[1]);
+        expect(seq.get(2)).toEqual(test_flow.steps[2]);
+        return expect(seq.get(3)).toEqual(test_flow.steps[3]);
+      });
+      return it("returns the correct length if nested sequences are included as steps", function() {
+        var complex_flow, seq, step, sub_seq1, sub_seq2;
+        sub_seq1 = new flow.Sequence(test_flow);
+        sub_seq2 = new flow.Sequence(test_flow);
+        step = new flow.Step();
+        complex_flow = {
+          id: "Complex Flow",
+          steps: [sub_seq1, sub_seq2, step]
+        };
+        seq = new flow.Sequence(complex_flow);
+        return expectProperSequenceState(seq, 0, 9, sub_seq1);
+      });
     });
     return describe("flow.Flow", function() {
       var expectProperPosition;
       expectProperPosition = function(flow, length, position, stepValue) {
-        expect(flow.sequence.length).toEqual(length);
+        expect(flow.length()).toEqual(length);
         expect(flow.current.position).toEqual(position);
         if (stepValue != null) {
           return expect(flow.current.step).toEqual(stepValue);

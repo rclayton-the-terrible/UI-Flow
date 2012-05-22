@@ -49,6 +49,13 @@
       this.validate = (_ref7 = this.validate) != null ? _ref7 : function() {
         return true;
       };
+      this.on_loading = Step.normalize_handlers(this.on_loading);
+      this.on_load = Step.normalize_handlers(this.on_load);
+      this.on_validating = Step.normalize_handlers(this.on_validating);
+      this.on_validated = Step.normalize_handlers(this.on_validated);
+      this.on_not_validated = Step.normalize_handlers(this.on_not_validated);
+      this.on_leaving = Step.normalize_handlers(this.on_leaving);
+      this.on_leave = Step.normalize_handlers(this.on_leave);
     }
 
     Step.get_state_by_name = function(name) {
@@ -69,6 +76,70 @@
         if (state.weight = weight) return state;
       }
       return null;
+    };
+
+    Step.normalize_handlers = function(handlers) {
+      if (handlers != null) {
+        return Step.arrayify(handlers);
+      } else {
+        return [];
+      }
+    };
+
+    Step.arrayify = function(handlers) {
+      if (handlers.push != null) {
+        return handlers;
+      } else {
+        return [handlers];
+      }
+    };
+
+    Step.prototype.set_state = function(name) {
+      var state_ctx;
+      state_ctx = this.get_state_by_name(name);
+      if (state_ctx != null) return this.state = state_ctx;
+    };
+
+    Step.prototype.length = function() {
+      return 1;
+    };
+
+    Step.prototype.is_valid = function() {
+      var validated;
+      Step.fire(this.on_validating);
+      validated = this.validate();
+      if (validated) {
+        this.set_state("validated");
+        return Step.fire(this.on_validated);
+      } else {
+        return Step.fire(this.on_not_validated);
+      }
+    };
+
+    Step.prototype.is_done = function() {
+      return this.is_valid();
+    };
+
+    Step.prototype.load = function() {
+      this.set_state("preload");
+      Step.fire(this.on_loading);
+      this.set_state("loaded");
+      return Step.fire(this.on_load);
+    };
+
+    Step.prototype.unload = function() {
+      this.set_state("pretrans");
+      return this.set_state("posttrans");
+    };
+
+    Step.fire = function(handlers, this_obj) {
+      var handler, _i, _len, _results;
+      _results = [];
+      for (_i = 0, _len = handlers.length; _i < _len; _i++) {
+        handler = handlers[_i];
+        _results.push(handler.apply(this_obj, [this_obj]));
+      }
+      return _results;
     };
 
     return Step;
@@ -107,7 +178,6 @@
       var _ref;
       Sequence.__super__.constructor.call(this, prototype);
       this.current_position = -1;
-      this.length = 0;
       this.steps = (_ref = this.steps) != null ? _ref : [];
       this.rectify();
     }
@@ -118,11 +188,10 @@
         this.current_position = 0;
       }
       if ((0 <= (_ref = this.current_position) && _ref < this.steps.length)) {
-        this.current = this.steps[this.current_position];
+        return this.current = this.steps[this.current_position];
       } else {
-        this.current = null;
+        return this.current = null;
       }
-      return this.length = this.steps.length;
     };
 
     Sequence.prototype.has_next = function() {
@@ -147,6 +216,16 @@
       }
     };
 
+    Sequence.prototype.get = function(position) {
+      if (this.steps.length === 0) {
+        return null;
+      } else if ((0 <= position && position < this.steps.length)) {
+        return this.steps[position];
+      } else {
+        return null;
+      }
+    };
+
     Sequence.prototype.append_all = function(steps) {
       var step, _i, _len;
       for (_i = 0, _len = steps.length; _i < _len; _i++) {
@@ -160,6 +239,22 @@
       if (do_rectify == null) do_rectify = true;
       this.steps.push(step);
       if (do_rectify) return this.rectify();
+    };
+
+    Sequence.prototype.length = function() {
+      var combined_length, step, step_length, _i, _len, _ref;
+      combined_length = 0;
+      _ref = this.steps;
+      for (_i = 0, _len = _ref.length; _i < _len; _i++) {
+        step = _ref[_i];
+        if (step.length != null) {
+          step_length = step.length();
+        } else {
+          step_length = 1;
+        }
+        combined_length += step_length;
+      }
+      return combined_length;
     };
 
     return Sequence;
@@ -181,26 +276,30 @@
         position: -1,
         step: null
       };
-      this.sequence = new Sequence();
+      this.root_seq = new Sequence();
       if (initial_state.steps != null) {
-        this.sequence.append_all(initial_state.steps);
+        this.root_seq.append_all(initial_state.steps);
       }
       this.update();
     }
 
     Flow.prototype.update = function(step_array) {
-      this.current.position = this.sequence.current_position;
-      return this.current.step = this.sequence.current;
+      this.current.position = this.root_seq.current_position;
+      return this.current.step = this.root_seq.current;
     };
 
     Flow.prototype.forward = function() {
-      this.sequence.next();
+      this.root_seq.next();
       return this.update();
     };
 
     Flow.prototype.back = function() {
-      this.sequence.previous();
+      this.root_seq.previous();
       return this.update();
+    };
+
+    Flow.prototype.length = function() {
+      return this.root_seq.length();
     };
 
     return Flow;

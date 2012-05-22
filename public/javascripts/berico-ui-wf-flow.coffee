@@ -27,6 +27,14 @@ class Step
 		@from = @from ? null
 		@state = @state ? Step.get_state_by_name "never_seen"
 		@validate = @validate ? () -> true
+		# Event Handlers
+		@on_loading = Step.normalize_handlers @on_loading
+		@on_load = Step.normalize_handlers @on_load
+		@on_validating = Step.normalize_handlers @on_validating
+		@on_validated = Step.normalize_handlers @on_validated
+		@on_not_validated = Step.normalize_handlers @on_not_validated
+		@on_leaving = Step.normalize_handlers @on_leaving
+		@on_leave = Step.normalize_handlers @on_leave
 		
 	@get_state_by_name: (name) ->
 		for state in Step.states
@@ -37,6 +45,50 @@ class Step
 		for state in Step.states
 			return state if state.weight = weight
 		return null
+	
+	@normalize_handlers: (handlers)->
+		if handlers? then return Step.arrayify handlers else return []
+	
+	@arrayify: (handlers)->
+		if handlers.push?
+			return handlers
+		else
+		    return [ handlers ]
+	
+	set_state: (name) ->
+		state_ctx = @get_state_by_name name
+		@state = state_ctx if state_ctx?
+	
+	length: ()-> 1
+	
+	is_valid: ()->
+		Step.fire @on_validating
+		validated = @validate()
+		if validated
+			@set_state("validated")
+			Step.fire @on_validated
+		else
+			Step.fire @on_not_validated
+	
+	is_done: ()->
+		return @is_valid()
+	
+	load: ()->
+		@set_state("preload")
+		Step.fire @on_loading
+		@set_state("loaded")
+		Step.fire @on_load
+	
+	unload: ()->
+		@set_state("pretrans")
+		@set_state("posttrans")
+	
+	@fire: (handlers, this_obj)->
+		# This looks wierd (handler.apply), but what we are doing is supply the handler
+		# with an object (this_obj) in which the closure for 'this' will apply.  We also
+		# supply the same object as the first parameter.  You choose how you want to 
+		# deal with the supplied object.
+		handler.apply(this_obj, [ this_obj ]) for handler in handlers
 	
 ###
 	Defines a step that manipulates a specific resource
@@ -57,7 +109,6 @@ class Sequence extends Step
 	constructor: (prototype) ->
 		super(prototype)
 		@current_position = -1
-		@length = 0
 		@steps = @steps ? []
 		@rectify()
 	
@@ -69,8 +120,6 @@ class Sequence extends Step
 			@current = @steps[@current_position]
 		else	
 			@current = null	
-		
-		@length = @steps.length
 		
 	has_next: () ->
 		(@current_position + 1) < @steps.length
@@ -88,6 +137,14 @@ class Sequence extends Step
 			@current_position--
 			@rectify()
 	
+	get: (position)->
+		if @steps.length is 0
+			return null
+		else if 0 <= position < @steps.length
+			return @steps[position]
+		else
+			return null
+	
 	append_all: (steps) ->
 		@append(step, false) for step in steps
 		@rectify()
@@ -95,6 +152,16 @@ class Sequence extends Step
 	append: (step, do_rectify = true) ->
 		@steps.push step
 		if do_rectify then @rectify()
+	
+	length: ()->
+		combined_length = 0
+		for step in @steps
+			if step.length?
+				step_length = step.length()
+			else
+				step_length = 1
+			combined_length += step_length
+		return combined_length
 		
 ###
 	Defines the root container of Steps and the basic object developers
@@ -106,21 +173,24 @@ class Flow
 		initial_state = initial_state ? {}
 		@id = initial_state.id ? "adhoc"
 		@current = { position: -1, step: null }
-		@sequence = new Sequence()
-		@sequence.append_all initial_state.steps if initial_state.steps?
+		@root_seq = new Sequence()
+		@root_seq.append_all initial_state.steps if initial_state.steps?
 		@update()
 		
 	update: (step_array) ->
-		@current.position = @sequence.current_position
-		@current.step = @sequence.current
+		@current.position = @root_seq.current_position
+		@current.step = @root_seq.current
 			
 	forward: ()->
-		@sequence.next()
+		@root_seq.next()
 		@update()
 	
 	back: ()->
-		@sequence.previous()
+		@root_seq.previous()
 		@update()
+		
+	length: ()->
+		@root_seq.length()
 	
 if exports? then flow = exports else flow = window	
 
